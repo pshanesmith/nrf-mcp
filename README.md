@@ -70,7 +70,7 @@ The `run.sh` wrapper fetches a fresh token from `gh auth token` each time the se
 
 | Variable | Default | Description |
 |---|---|---|
-| `NRF_SDK_REF` | see `nrfSdkRef` in `package.json` | SDK version to target — any git ref (tag, branch, commit SHA) |
+| `NRF_SDK_REF` | `main` (set via `nrfSdkRef` in `package.json`) | SDK version to target — any git ref (tag, branch, commit SHA) |
 | `GITHUB_TOKEN` | *(from `gh auth token`)* | GitHub API token; set explicitly to bypass the `gh` CLI |
 
 To target a different SDK version, set the env var in the MCP registration:

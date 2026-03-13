@@ -97,7 +97,7 @@ Use nrf_list to discover paths first. Examples:
       properties: {
         path: {
           type: "string",
-          description: "File path within the repo (e.g. 'samples/bluetooth/peripheral_hr/src/main.c')",
+          description: "File path within the repo (e.g. 'samples/bluetooth/central_bas/src/main.c')",
         },
       },
       required: ["path"],
@@ -116,7 +116,8 @@ Supports GitHub search qualifiers to narrow results:
 - Headers only:        "struct bt_conn extension:h"
 
 Returns matching file paths (up to 20). Use nrf_read to fetch the content.
-Note: Requires GITHUB_TOKEN for reliable results (unauthenticated search is heavily rate-limited).`,
+Note: Requires GITHUB_TOKEN for reliable results (unauthenticated search is heavily rate-limited).
+Note: GitHub code search always indexes the default branch (main), not the pinned NRF_SDK_REF. Use nrf_read with the discovered paths to fetch content at the configured ref.`,
     inputSchema: {
       type: "object",
       properties: {
