@@ -10,7 +10,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 const require = createRequire(import.meta.url);
-const DEFAULT_REF: string = require("../package.json").nrfSdkRef;
+const pkg = require("../package.json") as { nrfSdkRef: string; version: string };
+const DEFAULT_REF: string = pkg.nrfSdkRef;
 
 const REPO = "nrfconnect/sdk-nrf";
 const REF = process.env.NRF_SDK_REF ?? DEFAULT_REF;
@@ -132,18 +133,29 @@ Note: GitHub code search always indexes the default branch (main), not the pinne
 ];
 
 const server = new Server(
-  { name: "nrf-mcp", version: "1.0.0" },
+  { name: "nrf-mcp", version: pkg.version },
   { capabilities: { tools: {} } }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+
+function getString(args: unknown, key: string): string {
+  if (!args || typeof args !== "object" || !(key in args)) {
+    throw new Error(`Missing required argument: '${key}'`);
+  }
+  const value = (args as Record<string, unknown>)[key];
+  if (typeof value !== "string") {
+    throw new Error(`Argument '${key}' must be a string, got ${typeof value}`);
+  }
+  return value;
+}
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
     if (name === "nrf_list") {
-      const path = (args as { path: string }).path.replace(/^\/+|\/+$/g, "");
+      const path = getString(args, "path").replace(/^\/+|\/+$/g, "");
       const url = `${BASE_URL}/repos/${REPO}/contents/${encodePath(path)}?ref=${REF}`;
       const data = await githubGet(url);
 
@@ -167,7 +179,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "nrf_read") {
-      const path = (args as { path: string }).path.replace(/^\/+|\/+$/g, "");
+      const path = getString(args, "path").replace(/^\/+|\/+$/g, "");
       const url = `${BASE_URL}/repos/${REPO}/contents/${encodePath(path)}?ref=${REF}`;
       const data = await githubGet(url) as {
         type?: string;
@@ -205,7 +217,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "nrf_search") {
-      const query = (args as { query: string }).query;
+      const query = getString(args, "query");
       const fullQuery = `${query} repo:${REPO}`;
       const url = `${BASE_URL}/search/code?q=${encodeURIComponent(fullQuery)}&per_page=20`;
       const data = await githubGet(url) as {
@@ -220,7 +232,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const results = data.items.map((item) => item.path).join("\n");
-      const text = `Found ${data.total_count} result(s) (showing up to 20):\n\n${results}`;
+      const warning = REF !== "main"
+        ? `Note: GitHub code search always indexes 'main'. Results below are from main — paths will be read at '${REF}' when you call nrf_read, but a file that exists on main may not exist on ${REF}.\n\n`
+        : "";
+      const text = `Found ${data.total_count} result(s) (showing up to 20):\n\n${warning}${results}`;
       return {
         content: [{ type: "text", text }],
       };

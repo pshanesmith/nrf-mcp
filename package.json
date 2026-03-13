@@ -10,7 +10,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "python3 test.py"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
