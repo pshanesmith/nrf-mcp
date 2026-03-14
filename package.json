@@ -16,7 +16,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
-    "test": "node test.mjs",
+    "test": "node test/test.mjs",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "prepublishOnly": "npm run build"
