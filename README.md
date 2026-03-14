@@ -6,9 +6,9 @@ MCP server for Nordic nRF Connect SDK development. Provides Claude with tools to
 
 | Tool | Description |
 |---|---|
-| `nrf_list` | List files and directories at a given path in the SDK repo |
-| `nrf_read` | Read a file's contents (`.rst` docs, `.c`/`.h` source, `CMakeLists.txt`, `prj.conf`, etc.) |
-| `nrf_search` | Search across the repo using GitHub code search with qualifier support |
+| `nrf_list` | List files and directories at a given path in the SDK repo (includes file sizes) |
+| `nrf_read` | Read a file's contents (`.rst` docs, `.c`/`.h` source, `CMakeLists.txt`, `prj.conf`, etc.). Supports `startLine`/`endLine` for partial reads |
+| `nrf_search` | Search across the repo using GitHub code search with qualifier support. Returns context snippets and supports pagination |
 
 ### Search examples
 
@@ -25,6 +25,22 @@ peripheral_hr path:samples
 # Filter by file type
 CONFIG_BT_PERIPHERAL extension:conf
 bt_le_adv_start extension:c
+```
+
+### Reading specific line ranges
+
+When working with large files, use `startLine` and `endLine` to read just the relevant section:
+
+```json
+{ "path": "samples/bluetooth/central_bas/src/main.c", "startLine": 1, "endLine": 50 }
+```
+
+### Paginating search results
+
+Search returns up to 20 results per page. Use the `page` parameter to fetch more:
+
+```json
+{ "query": "bt_le_adv_start extension:c", "page": 2 }
 ```
 
 ## Setup
@@ -96,7 +112,7 @@ Run the end-to-end test suite (requires `gh` to be authenticated):
 npm test
 ```
 
-The tests spawn the server via `run.sh`, exercise all three tools, and validate input error handling.
+The tests spawn the server via `run.sh`, exercise all three tools (including line ranges, pagination, snippets, and 404 handling), and validate input error handling.
 
 ## Troubleshooting
 
@@ -116,6 +132,9 @@ Unauthenticated requests are limited to 60/hour. With a valid `GITHUB_TOKEN` the
 **Tools not appearing in Claude**
 - *Claude Code:* run `claude mcp list` to confirm `nrf-mcp` is registered, then restart the session.
 - *Claude Desktop:* restart the app after editing `claude_desktop_config.json`. Check the Desktop developer console for MCP startup errors.
+
+**Stale results**
+Directory listings and file contents are cached in memory for 5 minutes to reduce API calls. Restart the server to clear the cache.
 
 **Wrong SDK version**
 Confirm the active ref with `echo $NRF_SDK_REF` in the same shell, or check what's registered:
