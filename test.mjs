@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * End-to-end tests for nrf-mcp.
- * Spawns the server via run.sh and exercises all three tools over JSON-RPC.
+ * Spawns the server via run.sh and exercises all five tools over JSON-RPC.
  */
 
 import { spawn } from "node:child_process";
@@ -43,7 +43,7 @@ function startServer(env) {
   function rpc(method, params = {}) {
     const id = nextId++;
     const msg = JSON.stringify({ jsonrpc: "2.0", id, method, params });
-    proc.stdin.write(msg + "\n");
+    proc.stdin.write(`${msg}\n`);
     return new Promise((resolve) => {
       const queued = lines.shift();
       if (queued) {
@@ -60,9 +60,7 @@ function startServer(env) {
       capabilities: {},
       clientInfo: { name: "test", version: "0" },
     });
-    proc.stdin.write(
-      '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n'
-    );
+    proc.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n');
   }
 
   async function callTool(tool, args) {
@@ -88,6 +86,8 @@ async function run() {
     check("nrf_list registered", names.includes("nrf_list"));
     check("nrf_read registered", names.includes("nrf_read"));
     check("nrf_search registered", names.includes("nrf_search"));
+    check("nrf_diff registered", names.includes("nrf_diff"));
+    check("nrf_kconfig registered", names.includes("nrf_kconfig"));
 
     // -- nrf_list -------------------------------------------------------------
     console.log("\n── nrf_list ────────────────────────────────");
@@ -111,6 +111,24 @@ async function run() {
     r = await server.callTool("nrf_list", { path: "samples/bluetooth/central_bas/src/main.c" });
     check("file path returns helpful message", r.result.content[0].text.includes("nrf_read"));
 
+    // -- nrf_list recursive ---------------------------------------------------
+    console.log("\n── nrf_list (recursive) ─────────────────────");
+    r = await server.callTool("nrf_list", { path: "samples/bluetooth/central_bas", depth: 2 });
+    text = r.result.content[0].text;
+    lines = text.split("\n");
+    // With depth 2, we should see entries from subdirectories (e.g. src/main.c)
+    const hasNestedFiles = lines.some((l) => l.includes("/src/") && l.startsWith("[file]"));
+    check("depth 2 includes nested files", hasNestedFiles, `got ${lines.length} lines`);
+    check(
+      "depth 2 returns more than depth 1",
+      lines.length > fileLines.length + 1,
+      `${lines.length} vs ${fileLines.length}`,
+    );
+
+    // Depth is clamped to max 3
+    r = await server.callTool("nrf_list", { path: "samples/bluetooth/central_bas", depth: 99 });
+    check("depth > 3 is clamped (no error)", !r.result.isError);
+
     // -- nrf_read -------------------------------------------------------------
     console.log("\n── nrf_read ────────────────────────────────");
     r = await server.callTool("nrf_read", { path: "samples/bluetooth/central_bas/README.rst" });
@@ -123,11 +141,20 @@ async function run() {
 
     // -- nrf_read line range --------------------------------------------------
     console.log("\n── nrf_read (line range) ────────────────────");
-    r = await server.callTool("nrf_read", { path: "samples/bluetooth/central_bas/README.rst", startLine: 1, endLine: 5 });
+    r = await server.callTool("nrf_read", {
+      path: "samples/bluetooth/central_bas/README.rst",
+      startLine: 1,
+      endLine: 5,
+    });
     text = r.result.content[0].text;
     check("line range header present", text.includes("Lines 1"));
     check("line numbers in output", text.includes("1: "));
-    const rangeLines = text.split("\n\n").slice(1).join("\n\n").split("\n").filter((l) => l.trim());
+    const rangeLines = text
+      .split("\n\n")
+      .slice(1)
+      .join("\n\n")
+      .split("\n")
+      .filter((l) => l.trim());
     check("correct number of lines", rangeLines.length === 5, `got ${rangeLines.length}`);
 
     r = await server.callTool("nrf_read", { path: "samples/bluetooth/central_bas/README.rst", startLine: 3 });
@@ -168,6 +195,61 @@ async function run() {
     r = await s3.callTool("nrf_search", { query: "bt_le_adv_start extension:c" });
     s3.kill();
     check("warning shown when REF=v3.2.4", r.result.content[0].text.includes("Note: GitHub code search"));
+
+    // -- nrf_diff -------------------------------------------------------------
+    console.log("\n── nrf_diff ────────────────────────────────");
+    r = await server.callTool("nrf_diff", {
+      path: "samples/bluetooth/central_bas/prj.conf",
+      fromRef: "v2.7.0",
+      toRef: "v3.0.0",
+    });
+    text = r.result.content[0].text;
+    check("diff returns content", text.length > 0);
+    check("diff has --- header", text.includes("---"));
+    check("diff has +++ header", text.includes("+++"));
+    check("diff references refs", text.includes("v2.7.0") && text.includes("v3.0.0"), text.slice(0, 100));
+
+    // Same ref should show no differences
+    r = await server.callTool("nrf_diff", {
+      path: "samples/bluetooth/central_bas/prj.conf",
+      fromRef: "v3.0.0",
+      toRef: "v3.0.0",
+    });
+    text = r.result.content[0].text;
+    check("same ref shows no differences", text.includes("No differences"));
+
+    // Bad path
+    r = await server.callTool("nrf_diff", {
+      path: "this/does/not/exist.c",
+      fromRef: "main",
+      toRef: "v3.0.0",
+    });
+    check("diff with bad path returns error", r.result.isError);
+
+    // -- nrf_kconfig ----------------------------------------------------------
+    console.log("\n── nrf_kconfig ─────────────────────────────");
+    r = await server.callTool("nrf_kconfig", { symbol: "CONFIG_BT_PERIPHERAL" });
+    text = r.result.content[0].text;
+    check(
+      "kconfig returns definition",
+      text.includes("config BT_PERIPHERAL") || text.includes("BT_PERIPHERAL"),
+      text.slice(0, 100),
+    );
+    check("kconfig shows file path", text.includes("Kconfig") || text.includes(".kconfig"), text.slice(0, 150));
+
+    // Without CONFIG_ prefix
+    r = await server.callTool("nrf_kconfig", { symbol: "BT_PERIPHERAL" });
+    text = r.result.content[0].text;
+    check("kconfig works without CONFIG_ prefix", text.includes("BT_PERIPHERAL"), text.slice(0, 100));
+
+    // Non-existent symbol
+    r = await server.callTool("nrf_kconfig", { symbol: "THIS_SYMBOL_DOES_NOT_EXIST_EVER_XYZ" });
+    text = r.result.content[0].text;
+    check(
+      "unknown symbol returns helpful message",
+      text.includes("No Kconfig definition found") || text.includes("not"),
+      text.slice(0, 100),
+    );
 
     // -- 404 error message ----------------------------------------------------
     console.log("\n── 404 error message ───────────────────────");

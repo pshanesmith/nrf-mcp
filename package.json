@@ -8,16 +8,24 @@
   "bin": {
     "nrf-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "run.sh"
+  ],
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
-    "test": "node test.mjs"
+    "test": "node test.mjs",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
     "@types/node": "^22.0.0",
     "typescript": "^5.0.0"
   }

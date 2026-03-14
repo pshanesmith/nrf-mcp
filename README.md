@@ -6,9 +6,11 @@ MCP server for Nordic nRF Connect SDK development. Provides Claude with tools to
 
 | Tool | Description |
 |---|---|
-| `nrf_list` | List files and directories at a given path in the SDK repo (includes file sizes) |
-| `nrf_read` | Read a file's contents (`.rst` docs, `.c`/`.h` source, `CMakeLists.txt`, `prj.conf`, etc.). Supports `startLine`/`endLine` for partial reads |
+| `nrf_list` | List files and directories at a given path (includes file sizes). Supports recursive tree view with `depth` (max 3) |
+| `nrf_read` | Read a file's contents (`.rst` docs, `.c`/`.h` source, `CMakeLists.txt`, `prj.conf`, etc.). Supports `startLine`/`endLine` for partial reads. Large files (>500 KB) are streamed and auto-truncated |
 | `nrf_search` | Search across the repo using GitHub code search with qualifier support. Returns context snippets and supports pagination |
+| `nrf_diff` | Compare a file between two SDK versions (tags, branches, or SHAs). Returns a unified diff |
+| `nrf_kconfig` | Look up a `CONFIG_*` symbol — finds its Kconfig definition, type, defaults, and dependencies |
 
 ### Search examples
 
@@ -27,6 +29,14 @@ CONFIG_BT_PERIPHERAL extension:conf
 bt_le_adv_start extension:c
 ```
 
+### Recursive directory listing
+
+Use `depth` to get a full project overview in one call:
+
+```json
+{ "path": "samples/bluetooth/central_bas", "depth": 2 }
+```
+
 ### Reading specific line ranges
 
 When working with large files, use `startLine` and `endLine` to read just the relevant section:
@@ -41,6 +51,22 @@ Search returns up to 20 results per page. Use the `page` parameter to fetch more
 
 ```json
 { "query": "bt_le_adv_start extension:c", "page": 2 }
+```
+
+### Comparing SDK versions
+
+See what changed in a file between releases:
+
+```json
+{ "path": "samples/bluetooth/central_bas/src/main.c", "fromRef": "v3.0.0", "toRef": "v3.2.4" }
+```
+
+### Kconfig symbol lookup
+
+Look up what a `prj.conf` option does:
+
+```json
+{ "symbol": "CONFIG_BT_PERIPHERAL" }
 ```
 
 ## Setup
@@ -112,7 +138,7 @@ Run the end-to-end test suite (requires `gh` to be authenticated):
 npm test
 ```
 
-The tests spawn the server via `run.sh`, exercise all three tools (including line ranges, pagination, snippets, and 404 handling), and validate input error handling.
+The tests spawn the server via `run.sh`, exercise all five tools (including recursive listing, line ranges, pagination, snippets, diff, Kconfig lookup, and error handling), and validate input error handling.
 
 ## Troubleshooting
 
@@ -127,7 +153,7 @@ gh auth token   # should print a token
 `nrf_search` requires authentication. If the token is missing or expired, re-authenticate with `gh auth login`. For Claude Desktop, ensure `run.sh` is executable (`chmod +x run.sh`) — it prepends the Homebrew bin path to find `gh`.
 
 **`GitHub rate limit exceeded`**
-Unauthenticated requests are limited to 60/hour. With a valid `GITHUB_TOKEN` the limit is 5 000/hour. Ensure `gh auth token` returns a token and that `run.sh` is being used (not `node dist/index.js` directly).
+Unauthenticated requests are limited to 60/hour. With a valid `GITHUB_TOKEN` the limit is 5 000/hour. The server automatically retries on rate-limit errors with backoff (up to 30s). Ensure `gh auth token` returns a token and that `run.sh` is being used (not `node dist/index.js` directly).
 
 **Tools not appearing in Claude**
 - *Claude Code:* run `claude mcp list` to confirm `nrf-mcp` is registered, then restart the session.
